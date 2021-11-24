@@ -1,0 +1,1233 @@
+Imports System.Data.SqlClient
+Imports System.Data
+Imports System.IO
+Imports Microsoft.Office.Interop
+
+
+
+
+Class Management
+    Inherits System.Web.UI.Page
+    Dim cnnString As String = "Data Source=CSMDBS;Initial Catalog=Stage_Test;User ID=sa; pwd=ttprstf"
+    Dim LstQuery As New List(Of String)
+
+    ' ***************** VARIABILI SESSIONE **********************
+
+    Protected Property table() As String
+        Get
+            Return CStr(Session("table"))
+        End Get
+        Set(value As String)
+            Session("table") = value
+        End Set
+    End Property
+    Protected Property action() As String
+        Get
+            Return CStr(Session("action"))
+        End Get
+        Set(value As String)
+            Session("action") = value
+        End Set
+    End Property
+    Protected Property loadable() As Boolean
+        Get
+            Return CBool(Session("loadable"))
+        End Get
+        Set(value As Boolean)
+            Session("loadable") = value
+        End Set
+    End Property
+    Protected Property idRegistration() As Integer
+        Get
+            Return CInt(Session("idRegistration"))
+        End Get
+        Set(value As Integer)
+            Session("idRegistration") = value
+        End Set
+    End Property
+    Protected Property company() As String
+        Get
+            Return CStr(Session("company"))
+        End Get
+        Set(value As String)
+            Session("company") = value
+        End Set
+    End Property
+
+    '***********************************************************
+
+    Protected Sub Page_Load(sender As Object, e As System.EventArgs) Handles Me.Load
+        Dim id As Integer = -1
+        If Not IsPostBack Then
+            table = "REGISTRATIONS"
+            action = "insert"
+            loadable = False
+            loadItems("")
+            If LstQuery.Count = 0 Then
+                initDictionary()
+            End If
+            loadDropDownList()
+            pnlFilters.Visible = True
+            label50.Visible = False
+            label53.Visible = False
+            label52.Visible = False
+            label55.Visible = False
+            label56.Visible = False
+            DropDownList1.Visible = False
+            DropDownList4.Visible = False
+            DropDownList3.Visible = False
+            DropDownList6.Visible = False
+            DropDownList7.Visible = False
+        ElseIf loadable Then
+            If (action.Length > 6) Then
+                id = CInt(action.Remove(0, 6))
+            End If
+            loadFields()
+            loadItem(id)
+            loadable = False
+        End If
+    End Sub
+    Private Sub initDictionary()
+        LstQuery.Add("Select distinct upper(season) season from CALENDAR")
+        LstQuery.Add("Select distinct upper(name) name from COURSES")
+        LstQuery.Add("Select distinct upper(C_AREAMANAGER) + ' - ' + upper(C_DESCAREAMANAGER) areamanager from CSMSQL.SANMARCO_AX50_PROD.dbo.CSM_AREAMANAGERTABLE WHERE dataareaid in ('NOV','CSM')")
+        LstQuery.Add("Select distinct upper(NAME) agent from CSMSQL.SANMARCO_AX50_PROD.dbo.VENDTABLE where TILECOMVENDORAGENT=1")
+        LstQuery.Add("Select distinct upper(capcode) + ' - ' + upper(capname) + ' - ' + COMPANY capcode from REGISTRATIONS")
+        LstQuery.Add("Select distinct upper(CAPCOUNTRY) capcountry from REGISTRATIONS")
+        LstQuery.Add("Select distinct upper(CAPCOUNTY) capcounty from REGISTRATIONS")
+    End Sub 'query per inizializzare filtri
+    Protected Sub btnRegistrations_Click(sender As Object, e As System.EventArgs)
+        table = "REGISTRATIONS"
+        loadable = False
+        action = "insert"
+        btnSave.Visible = False
+        pnlFields.Controls.Clear()
+        If LstQuery.Count = 0 Then
+            initDictionary()
+        End If
+        loadItems("")
+        loadDropDownList()
+        pnlFilters.Visible = True
+        label50.Visible = False
+        label53.Visible = False
+        label52.Visible = False
+        label55.Visible = False
+        label56.Visible = False
+        DropDownList1.Visible = False
+        DropDownList4.Visible = False
+        DropDownList3.Visible = False
+        DropDownList6.Visible = False
+        DropDownList7.Visible = False
+    End Sub
+    Protected Sub btnCalendar_Click(sender As Object, e As System.EventArgs)
+        table = "CALENDAR"
+        loadable = False
+        action = "insert"
+        btnSave.Visible = False
+        pnlFields.Controls.Clear()
+        pnlFilters.Visible = False
+        loadItems("")
+    End Sub
+    Protected Sub btnCourses_Click(sender As Object, e As System.EventArgs)
+        table = "COURSES"
+        loadable = False
+        action = "insert"
+        btnSave.Visible = False
+        pnlFilters.Visible = False
+        pnlFields.Controls.Clear()
+        loadItems("")
+    End Sub
+    Protected Sub btnLocations_Click(sender As Object, e As System.EventArgs)
+        table = "LOCATIONS"
+        loadable = False
+        action = "insert"
+        btnSave.Visible = False
+        pnlFilters.Visible = False
+        pnlFields.Controls.Clear()
+        loadItems("")
+    End Sub
+    Protected Sub btnCosts_Click(sender As Object, e As System.EventArgs)
+        table = "COSTS"
+        loadable = False
+        action = "insert"
+        btnSave.Visible = False
+        pnlFilters.Visible = False
+        pnlFields.Controls.Clear()
+        loadItems("")
+    End Sub
+    Protected Sub btnSummaryCourses_Click(sender As Object, e As System.EventArgs) Handles btnSummaryCourses.Click
+        table = "SUMMARY"
+        loadable = False
+        btnSave.Visible = False
+        pnlFields.Controls.Clear()
+        loadItems("")
+        If LstQuery.Count = 0 Then
+            initDictionary()
+        End If
+        loadDropDownList()
+        label50.Visible = True
+        label53.Visible = True
+        label52.Visible = True
+        label55.Visible = True
+        label56.Visible = True
+        DropDownList1.Visible = True
+        DropDownList4.Visible = True
+        DropDownList3.Visible = True
+        DropDownList6.Visible = True
+        DropDownList7.Visible = True
+    End Sub
+    Protected Sub btnSave_Click(sender As Object, e As System.EventArgs)
+        If action = "insert" Then
+            insert()
+        Else
+            update()
+        End If
+    End Sub
+    Protected Sub lnkExcelExport_Click(sender As Object, e As EventArgs)
+        Try
+            Response.Clear()
+            Response.Buffer = True
+            Response.AddHeader("content-disposition", "attachment;filename=GridViewExport.xls")
+            Response.Charset = ""
+            Response.ContentType = "application/vnd.ms-excel"
+
+            Using sw As New StringWriter()
+                Dim hw As New HtmlTextWriter(sw)
+                grdItems.AllowPaging = False
+                loadItems("")
+                grdItems.RenderControl(hw)
+                Dim style As String = "<style> .textmode { } </style>"
+                Response.Write(style)
+                Response.Output.Write(sw.ToString())
+                Response.Flush()
+                Response.[End]()
+            End Using
+            modaltitle.CssClass = "glyphicon glyphicon-ok-circle"
+            modaltext.Text = "Excel correctly exported"
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        End Try
+    End Sub
+    Public Overrides Sub VerifyRenderingInServerForm(control As Control)
+    End Sub 'non eliminare
+    Protected Sub lnkCreateNew_Click(sender As Object, e As System.EventArgs)
+        loadable = True
+        btnSave.Visible = True
+        action = "insert"
+        pnlFields.Controls.Clear()
+        loadFields()
+        pnlFilters.Visible = False
+    End Sub
+    Protected Sub btnConfirmCAP_Click(sender As Object, e As System.EventArgs)
+        Dim cnn As New SqlConnection("Data Source=CSMSQL;Initial Catalog=SANMARCO_AX50_PROD;User ID=sa; pwd=SanMarc055$")
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim calendar As String = CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text
+        Dim calendaArray() As String = calendar.Split("-")
+        Try
+            cmd.CommandText = "select CUSTTABLE.NAME,CUSTTABLE.COUNTY,CUSTTABLE.COUNTRYREGIONID,CUSTTABLE.PHONE,TILECOMAGENT,VENDTABLE.NAME from CUSTTABLE left outer join " &
+                              "VENDTABLE on CUSTTABLE.DATAAREAID = VENDTABLE.DATAAREAID and CUSTTABLE.TILECOMAGENT = VENDTABLE.ACCOUNTNUM where CUSTTABLE.ACCOUNTNUM='" &
+                              CType(pnlFields.FindControl("TextBox2"), TextBox).Text & "' and CUSTTABLE.DATAAREAID='" & calendaArray(3) & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = cnn
+            cnn.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                For i As Integer = 0 To 5
+                    CType(pnlFields.FindControl("TextBox" & i + 3), TextBox).Text = reader(i)
+                Next
+            End While
+            cnn.Close()
+            CType(pnlFields.FindControl("TextBox7"), TextBox).Focus()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If cnn.State = ConnectionState.Open Then
+                cnn.Close()
+            End If
+            loadable = True
+        End Try
+    End Sub
+    Protected Sub btnGenerate_Click(sender As Object, e As System.EventArgs)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim loginCode As String = "A0000"
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim courseCode As String = infoCourse(idRegistration)
+        courseCode = courseCode.Substring(0, 2)
+        Try
+            cmd.CommandText = "select top(1) LOGINCODE from PARTICIPANTS where LOGINCODE like '" & courseCode & "%' order by ID desc"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                loginCode = IIf(IsDBNull(reader(0)), loginCode, reader(0))
+            End While
+            sqlConnection1.Close()
+            loginCode = courseCode & String.Format("{0:000}", CInt(loginCode.Substring(2, 3)) + 1)
+            CType(pnlFields.FindControl("TextBox16"), TextBox).Text = loginCode
+            CType(pnlFields.FindControl("TextBox16"), TextBox).Focus()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+            loadable = True
+        End Try
+    End Sub
+    Protected Sub grdItems_PageIndexChanging(sender As Object, e As GridViewPageEventArgs)
+        grdItems.PageIndex = e.NewPageIndex
+        loadItems(getfilter())
+    End Sub 'cambio pagina griglia
+    Protected Sub grdItems_RowDeleting(sender As Object, e As GridViewDeleteEventArgs) Handles grdItems.RowDeleting
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Try
+            If table = "REGISTRATIONS" Then
+                cmd.CommandText = "delete from " & table & " where ID='" & grdItems.Rows(e.RowIndex).Cells(2).Text & "'"
+            Else
+                cmd.CommandText = "delete from " & table & " where ID='" & grdItems.Rows(e.RowIndex).Cells(1).Text & "'"
+            End If
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            pnlFields.Controls.Clear()
+            sqlConnection1.Open()
+            cmd.ExecuteNonQuery()
+            sqlConnection1.Close()
+            loadItems("")
+            btnSave.Visible = False
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub grdItems_SelectedIndexChanged(sender As Object, e As EventArgs) Handles grdItems.SelectedIndexChanged
+        pnlFields.Controls.Clear()
+        loadFields()
+        If table = "REGISTRATIONS" Then
+            loadable = True
+            btnSave.Visible = True
+            loadItem(grdItems.Rows(grdItems.SelectedIndex).Cells(2).Text)
+            action = "update" & grdItems.Rows(grdItems.SelectedIndex).Cells(2).Text
+        Else
+            loadable = True
+            btnSave.Visible = True
+            loadItem(grdItems.Rows(grdItems.SelectedIndex).Cells(1).Text)
+            action = "update" & grdItems.Rows(grdItems.SelectedIndex).Cells(1).Text
+        End If
+    End Sub
+    Protected Sub lnk_Click(sender As Object, e As EventArgs)
+        Dim lnkView As LinkButton = TryCast(sender, LinkButton)
+        Dim row As GridViewRow = TryCast(lnkView.NamingContainer, GridViewRow)
+        table = "PARTICIPANTS"
+        loadable = False
+        action = "insert"
+        idRegistration = row.Cells(2).Text
+        company = row.Cells(15).Text
+        btnSave.Visible = False
+        pnlFields.Controls.Clear()
+        loadItems("")
+        pnlFilters.Visible = False
+    End Sub
+    Protected Sub OnRowDataBound(sender As Object, e As GridViewRowEventArgs) Handles grdItems.RowCreated
+        If e.Row.RowType = DataControlRowType.DataRow And table = "REGISTRATIONS" Then
+            Dim lnkView As New LinkButton()
+            lnkView.ID = "lnkView"
+            lnkView.Text = "Partecipanti"
+            AddHandler lnkView.Click, AddressOf lnk_Click
+            e.Row.Cells(1).Controls.Add(lnkView)
+        End If
+    End Sub
+    Protected Function getfilter() As String
+        Dim filter As New StringBuilder
+        If DropDownList1.Text <> "" Then
+            filter.Append("SEASON like '%").Append(DropDownList1.Text).Append("%' and ")
+        End If
+        If DropDownList2.Text <> "" Then
+            filter.Append("NAME like '%").Append(DropDownList2.Text).Append("%' and ")
+        End If
+        If DropDownList3.Text <> "" Then
+            filter.Append("AREAMANAGER like '%").Append(DropDownList3.Text.Substring(0, DropDownList3.Text.IndexOf("-") - 1)).Append("%' and ")
+        End If
+        If DropDownList4.Text <> "" Then
+            filter.Append("AGENT like '%").Append(DropDownList4.Text).Append("%' and ")
+        End If
+        If DropDownList5.Text <> "" Then
+            filter.Append("CAPCODE like '%").Append(DropDownList5.Text.Substring(0, DropDownList5.Text.IndexOf("-") - 1)).Append("%' and ")
+        End If
+        If DropDownList6.Text <> "" Then
+            filter.Append("CAPCOUNTRY like '%").Append(DropDownList6.Text).Append("%' and ")
+        End If
+        If DropDownList7.Text <> "" Then
+            filter.Append("CAPCOUNTY like '%").Append(DropDownList7.Text).Append("%' and ")
+        End If
+        If text8.Text <> "" Then
+            If DropDownList1.Visible = True Then
+                filter.Append("DATE = convert(datetime, '").Append(text8.Text).Append("', 103) and ")
+            Else
+                filter.Append("CALENDAR.DATE = convert(datetime, '").Append(text8.Text).Append("', 103) and ")
+            End If
+
+        End If
+        Return filter.ToString()
+    End Function 'stringa che si aggiunge alla query per filtrare
+    Protected Sub btnFilter_Click(sender As Object, e As EventArgs)
+        loadItems(getfilter())
+    End Sub 'filtro
+    Protected Sub loadItems(ByVal filter As String)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim dt As DataTable = New DataTable
+        Dim tfield = New TemplateField()
+        Dim column As Integer = 0
+        Try
+            tfield.HeaderText = ""
+            'pnlFilters.Visible = False
+            grdItems.AutoGenerateDeleteButton = True
+            grdItems.AutoGenerateSelectButton = True
+            lnkExcelExport.Visible = True
+            lnkCreateNew.Visible = True
+            grdItems.Columns.Clear()
+            Select Case table
+                Case "REGISTRATIONS"
+                    title.Text = "REGISTRAZIONI"
+                    cmd.CommandText = "select REGISTRATIONS.ID,CODE+'-'+convert(nvarchar(20),CALENDAR.DATE,103)+'-'+CALENDAR.ORIGIN+'-'+REGISTRATIONS.COMPANY,CAPCODE,CAPNAME,CAPCOUNTY,CAPCOUNTRY," &
+                                      "NPARTECIPANTS,NOVERNIGHTS,NONENIGHTS,NTWONIGHTS, NTHREENIGHTS,NNONIGHTS,PICKUP,REGISTRATIONS.COMPANY from REGISTRATIONS inner join CALENDAR on REGISTRATIONS.IDCALENDAR=CALENDAR.ID " &
+                                      "and REGISTRATIONS.COMPANY=CALENDAR.COMPANY inner join COURSES on CALENDAR.IDcOURSE=COURSES.ID and CALENDAR.COMPANY=COURSES.COMPANY WHERE " & filter & "1=1 ORDER BY CALENDAR.DATE DESC"
+                    column = 14
+                    dt.Columns.Add("ID")
+                    dt.Columns.Add("Calendario")
+                    dt.Columns.Add("Codice CAP")
+                    dt.Columns.Add("Nome CAP")
+                    dt.Columns.Add("Provincia CAP")
+                    dt.Columns.Add("Stato CAP")
+                    dt.Columns.Add("N° partecipanti")
+                    dt.Columns.Add("N° pernottamenti")
+                    dt.Columns.Add("N° una notte")
+                    dt.Columns.Add("N° due notti")
+                    dt.Columns.Add("N° tre notti")
+                    dt.Columns.Add("N° nessuna notte")
+                    dt.Columns.Add("Pickup")
+                    dt.Columns.Add("Company")
+                    grdItems.Columns.Add(tfield)
+                Case "PARTICIPANTS"
+                    title.Text = "PARTECIPANTI"
+                    cmd.CommandText = "select ID,NAME,LASTNAME,PICKUP,LOGINCODE from PARTICIPANTS where IDREGISTRATION='" & idRegistration & "'"
+                    column = 5
+                    dt.Columns.Add("ID")
+                    dt.Columns.Add("Nome")
+                    dt.Columns.Add("Cognome")
+                    dt.Columns.Add("Pickup")
+                    dt.Columns.Add("LoginCode")
+                Case "COURSES"
+                    title.Text = "CORSI"
+                    cmd.CommandText = "select ID,CODE,NAME,DURATION,MIN,MAX,COMPANY from COURSES"
+                    column = 7
+                    dt.Columns.Add("ID")
+                    dt.Columns.Add("Codice")
+                    dt.Columns.Add("Corso")
+                    dt.Columns.Add("Durata")
+                    dt.Columns.Add("Min")
+                    dt.Columns.Add("Max")
+                    dt.Columns.Add("Company")
+                Case "CALENDAR"
+                    title.Text = "CALENDARI"
+                    cmd.CommandText = "select CALENDAR.ID,LOCATIONS.NAME,CODE,convert(nvarchar(20),DATE,103),SEASON,PROFESSOR,ORIGIN,CALENDAR.COMPANY from CALENDAR inner join COURSES on " &
+                                      "CALENDAR.IDCOURSE=COURSES.ID and CALENDAR.COMPANY=COURSES.COMPANY inner join LOCATIONS on CALENDAR.IDLOCATION=LOCATIONS.ID and CALENDAR.COMPANY=LOCATIONS.COMPANY"
+                    column = 8
+                    dt.Columns.Add("ID")
+                    dt.Columns.Add("Training")
+                    dt.Columns.Add("Codice corso")
+                    dt.Columns.Add("Data corso")
+                    dt.Columns.Add("Stagione")
+                    dt.Columns.Add("Professore")
+                    dt.Columns.Add("Origine")
+                    dt.Columns.Add("Company")
+                Case "LOCATIONS"
+                    title.Text = "SITI"
+                    cmd.CommandText = "select ID,SITE,NAME,ADDRESS,COMPANY from LOCATIONS"
+                    column = 5
+                    dt.Columns.Add("ID")
+                    dt.Columns.Add("Sito")
+                    dt.Columns.Add("Training")
+                    dt.Columns.Add("Indirizzo")
+                    dt.Columns.Add("Company")
+                Case "COSTS"
+                    title.Text = "COSTI"
+                    cmd.CommandText = "select COSTS.ID,COSTITEMS.NAME,COURSES.CODE,CALENDAR.DATE,CALENDAR.ORIGIN,COSTS.VALUE,COSTS.COMPANY from COSTITEMS inner join COSTS on COSTITEMS.ID=COSTS.IDCOSTITEMS " &
+                                      "inner join CALENDAR on COSTS.IDCALENDAR=CALENDAR.ID and COSTS.COMPANY=CALENDAR.COMPANY inner join COURSES on CALENDAR.IDCOURSE=COURSES.ID and CALENDAR.COMPANY=COURSES.COMPANY"
+                    column = 7
+                    dt.Columns.Add("ID")
+                    dt.Columns.Add("Costo")
+                    dt.Columns.Add("Corso")
+                    dt.Columns.Add("Data corso")
+                    dt.Columns.Add("Origine")
+                    dt.Columns.Add("Importo")
+                    dt.Columns.Add("Company")
+                Case "SUMMARY"
+                    title.Text = "RIEPILOGO CORSI"
+                    pnlFilters.Visible = True
+                    grdItems.AutoGenerateDeleteButton = False
+                    grdItems.AutoGenerateSelectButton = False
+                    lnkExcelExport.Visible = False
+                    lnkCreateNew.Visible = False
+                    cmd.CommandText = "select distinct AREAMANAGER,AGENT,CAPCODE,CAPNAME,CAPCOUNTY,CAPCOUNTRY,CODE,NAME,DATE,DURATION,NPARTECIPANTS,SEASON from COURSESSUMMARY " &
+                                      "where " & filter & "1=1 ORDER BY DATE DESC"
+                    column = 12
+                    dt.Columns.Add("Capo Area")
+                    dt.Columns.Add("Agente")
+                    dt.Columns.Add("Codice Cliente")
+                    dt.Columns.Add("Cliente")
+                    dt.Columns.Add("Provincia")
+                    dt.Columns.Add("Stato")
+                    dt.Columns.Add("Corso")
+                    dt.Columns.Add("Nome Corso")
+                    dt.Columns.Add("Data Corso")
+                    dt.Columns.Add("Durata Corso")
+                    dt.Columns.Add("N° Partecipanti")
+                    dt.Columns.Add("Stagione")
+
+            End Select
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.HasRows() And reader.Read()
+                Dim dr As DataRow = dt.NewRow
+                For i As Integer = 0 To column - 1
+                    dr(i) = reader(i).ToString.ToUpper
+                Next
+                dt.Rows.Add(dr)
+
+            End While
+            grdItems.DataSource = dt
+            grdItems.DataBind()
+            sqlConnection1.Close()
+
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub 'carica i dati nella griglia
+    Protected Sub loadDropDownList()
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim reader As SqlDataReader
+        sqlConnection1.Open()
+        Try
+            For i As Integer = 0 To LstQuery.Count - 1
+                Dim cmd As New SqlCommand(LstQuery(i), sqlConnection1)
+                reader = cmd.ExecuteReader()
+                cmd.CommandTimeout = 420
+                CType(pnlFilters.FindControl("dropdownlist" & i + 1), DropDownList).DataSource = reader
+                CType(pnlFilters.FindControl("dropdownlist" & i + 1), DropDownList).DataTextField = reader.GetName(0)
+                CType(pnlFilters.FindControl("dropdownlist" & i + 1), DropDownList).DataValueField = reader.GetName(0)
+                CType(pnlFilters.FindControl("dropdownlist" & i + 1), DropDownList).DataBind()
+                CType(pnlFilters.FindControl("dropdownlist" & i + 1), DropDownList).Items.Insert(0, New ListItem("", "")) 'INSERISCO IL PRIMO ELEMENTO VUOTO
+                reader.Close()
+            Next
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub  'inizializza i filtri di ricerca
+    Protected Sub loadItem(ByVal id As Integer)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim TextBox As TextBox
+        Dim DropDownList As DropDownList
+        Dim Checkbox As CheckBox
+        Dim n As Integer = 0
+        Try
+            Select Case table
+                Case "REGISTRATIONS"
+                    cmd.CommandText = "select CODE+'-'+convert(nvarchar(20),CALENDAR.DATE,103)+'-'+CALENDAR.ORIGIN+'-'+REGISTRATIONS.COMPANY,CAPCODE,CAPNAME,CAPCOUNTY,CAPCOUNTRY," &
+                                      "CAPPHONE,AGENTCODE,AGENTNAME,NPARTECIPANTS,NOVERNIGHTS,REPRESENTATIVE,DISCOUNT10,HELPER,HELPERNAME,HELPERWORK,NONENIGHTS,NTWONIGHTS, NTHREENIGHTS,NNONIGHTS," &
+                                      "PICKUP,NOTES,REGISTRATIONS.COMPANY from REGISTRATIONS inner join CALENDAR on REGISTRATIONS.IDCALENDAR=CALENDAR.ID and REGISTRATIONS.COMPANY=CALENDAR.COMPANY " &
+                                      "inner join COURSES on CALENDAR.IDcOURSE=COURSES.ID and CALENDAR.COMPANY=COURSES.COMPANY where REGISTRATIONS.ID='" & id & "'"
+                    n = 21
+                Case "PARTICIPANTS"
+                    cmd.CommandText = "select NAME,LASTNAME,BIRTHYEAR,ADDRESS,CITY,ZIPCODE,COUNTY,STATE,DESCLANGUAGE,EMAIL,PHONE,FAX,MOBILEPHONE,CUSTOMERTYPE,PARTICIPANTS.PICKUP,LOGINCODE " &
+                                       "from REGISTRATIONS inner join PARTICIPANTS on REGISTRATIONS.ID=IDREGISTRATION and REGISTRATIONS.COMPANY=PARTICIPANTS.COMPANY inner join LANGUAGES on IDLANGUAGE=LANGUAGES.ID " &
+                                       "where PARTICIPANTS.ID='" & id & "'"
+                    n = 15
+                Case "CALENDAR"
+                    cmd.CommandText = "select LOCATIONS.NAME+'-'+CALENDAR.COMPANY,CODE+'-'+CALENDAR.COMPANY,convert(nvarchar(20),DATE,103),SEASON,PROFESSOR,ORIGIN,CALENDAR.COMPANY from CALENDAR inner join COURSES on CALENDAR.IDCOURSE=COURSES.ID and " &
+                                      "CALENDAR.COMPANY=DBO.COURSES.COMPANY inner join LOCATIONS on CALENDAR.IDlOCATION=LOCATIONS.ID and CALENDAR.COMPANY=LOCATIONS.COMPANY where CALENDAR.ID='" & id & "'"
+                    n = 6
+                Case "COURSES"
+                    cmd.CommandText = "select CODE,NAME,DURATION,MIN,MAX,COMPANY from COURSES where ID='" & id & "'"
+                    n = 5
+                Case "LOCATIONS"
+                    cmd.CommandText = "select SITE,NAME,ADDRESS,COMPANY from LOCATIONS where ID='" & id & "'"
+                    n = 3
+                Case "COSTS"
+                    cmd.CommandText = "select COSTITEMS.NAME,CODE+'-'+convert(nvarchar(20),date,103)+'-'+ORIGIN+'-'+COSTS.COMPANY,VALUE,COSTS.COMPANY from COSTS inner join COSTITEMS on COSTS.IDCOSTITEMS=COSTITEMS.ID " &
+                                      "inner join CALENDAR on COSTS.IDCALENDAR=CALENDAR.ID and COSTS.COMPANY=CALENDAR.COMPANY inner join COURSES on CALENDAR.IDCOURSE=COURSES.ID and CALENDAR.COMPANY=COURSES.COMPANY " &
+                                      "where COSTS.ID='" & id & "'"
+                    n = 3
+            End Select
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                If CType(pnlFields.FindControl("TextBox1"), TextBox) IsNot Nothing Or CType(pnlFields.FindControl("DropDownList8"), DropDownList) IsNot Nothing Then
+                    For i As Integer = 0 To n
+                        If i = 0 And (table = "REGISTRATIONS" Or table = "CALENDAR" Or table = "COSTS") Then
+                            DropDownList = CType(pnlFields.FindControl("DropDownList8"), DropDownList)
+                            DropDownList.SelectedValue = IIf(IsDBNull(reader(i)), vbNullString, reader(i))
+                        ElseIf i = 1 And (table = "CALENDAR" Or table = "COSTS") Then
+                            DropDownList = CType(pnlFields.FindControl("DropDownList9"), DropDownList)
+                            DropDownList.SelectedValue = IIf(IsDBNull(reader(i)), vbNullString, reader(i))
+                        ElseIf (i = 11 Or i = 12 Or i = 14 Or i = 19) And table = "REGISTRATIONS" Then
+                            Checkbox = CType(pnlFields.FindControl("CheckBox" & i + 1), CheckBox)
+                            Checkbox.Checked = IIf(IsDBNull(reader(i)), False, reader(i))
+                        ElseIf i = 8 And table = "PARTICIPANTS" Then
+                            DropDownList = CType(pnlFields.FindControl("DropDownList8"), DropDownList)
+                            DropDownList.SelectedValue = IIf(IsDBNull(reader(i)), vbNullString, reader(i))
+                        ElseIf i = 14 And table = "PARTICIPANTS" Then
+                            Checkbox = CType(pnlFields.FindControl("CheckBox" & i + 1), CheckBox)
+                            Checkbox.Checked = IIf(IsDBNull(reader(i)), False, reader(i))
+                        Else
+                            TextBox = CType(pnlFields.FindControl("TextBox" & i + 1), TextBox)
+                            TextBox.Text = IIf(IsDBNull(reader(i)), "", reader(i))
+                        End If
+                    Next
+                End If
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            ClientScript.RegisterStartupScript(Me.GetType(), "AlertMessageBox", "alert('" & ex.Message & "');", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub loadFields()
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim fieldsNames(1) As String
+        pnlFields.Controls.Clear()
+        Select Case table
+            Case "REGISTRATIONS"
+                Array.Resize(fieldsNames, 22)
+                fieldsNames = New String() {"*Calendario:", "Codice CAP:", "Nome CAP:", "Provincia CAP:", "Stato CAP:", "Telefono CAP:", "Codice agente:", "Nome agente:", "*N° partecipanti:",
+                                            "*N° pernottamenti:", "Referente:", "*Sconto 10%:", "Accompagnatore:", "Nome accompagnatore:", "Applica:", "N° una notte:", "N° due notti:",
+                                            "N° tre notti:", "N° nessuna notte:", "Pickup:", "Note:", "*Company:"}
+            Case "PARTICIPANTS"
+                Array.Resize(fieldsNames, 16)
+                fieldsNames = New String() {"Nome:", "Cognome:", "Anno di nascita:", "Indirizzo:", "Città:", "CAP:", "Provincia:", "Stato:", "*Lingua:", "Email:", "Telefono:", "Fax:", "Cellulare:",
+                                            "Tipo cliente:", "Pickup:", "LoginCode:"}
+            Case "CALENDAR"
+                Array.Resize(fieldsNames, 7)
+                fieldsNames = New String() {"*Sito:", "*Corso:", "*Data:", "*Stagione:", "Docente:", "*Origine:", "*Company:"}
+            Case "COURSES"
+                Array.Resize(fieldsNames, 6)
+                fieldsNames = New String() {"*Codice:", "Nome:", "*Durata:", "*Min:", "*Max:", "*Company:"}
+            Case "LOCATIONS"
+                Array.Resize(fieldsNames, 4)
+                fieldsNames = New String() {"Sito:", "Training:", "Indirizzo:", "*Company:"}
+            Case "COSTS"
+                Array.Resize(fieldsNames, 4)
+                fieldsNames = New String() {"*Costo:", "Calendario:", "Importo:", "*Company:"}
+        End Select
+        For i As Integer = 0 To fieldsNames.Length - 1
+            Dim label As New Label
+            Dim text As New TextBox
+            Dim drop As New DropDownList
+            Dim check As New CheckBox
+            Dim validate As New RequiredFieldValidator
+            label.ID = "Label" & i
+            label.Text = fieldsNames(i)
+            pnlFields.Controls.Add(label)
+            If i = 0 And (table = "REGISTRATIONS" Or table = "CALENDAR" Or table = "COSTS") Then
+                drop.ID = "DropDownList8"
+                drop.CssClass = "form-control"
+                drop.EnableViewState = True
+                pnlFields.Controls.Add(drop)
+                If table = "REGISTRATIONS" Then
+                    loadCalendar(drop.ID)
+                ElseIf table = "CALENDAR" Then
+                    loadLocations(drop.ID)
+                Else
+                    loadCostItems(drop.ID)
+                End If
+                If CType(pnlFields.FindControl("Label" & i), Label).Text.Contains("*") Then
+                    validate.ID = "RequiredFieldValidator" & i
+                    validate.ControlToValidate = drop.ID
+                    validate.ErrorMessage = "*campo obbligatorio"
+                    validate.Display = ValidatorDisplay.Dynamic
+                    validate.ForeColor = Drawing.Color.Red
+                    validate.ValidationGroup = "group1"
+                    pnlFields.Controls.Add(validate)
+                End If
+            ElseIf i = 1 And (table = "CALENDAR" Or table = "COSTS") Then
+                drop.ID = "DropDownList9"
+                drop.CssClass = "form-control"
+                drop.EnableViewState = True
+                pnlFields.Controls.Add(drop)
+                If table = "CALENDAR" Then
+                    loadCourses(drop.ID)
+                Else
+                    loadCalendar(drop.ID)
+                End If
+                If CType(pnlFields.FindControl("Label" & i), Label).Text.Contains("*") Then
+                    validate.ID = "RequiredFieldValidator" & i
+                    validate.ControlToValidate = drop.ID
+                    validate.ErrorMessage = "*campo obbligatorio"
+                    validate.Display = ValidatorDisplay.Dynamic
+                    validate.ForeColor = Drawing.Color.Red
+                    validate.ValidationGroup = "group1"
+                    pnlFields.Controls.Add(validate)
+                End If
+            ElseIf i = 8 And table = "PARTICIPANTS" Then
+                drop.ID = "DropDownList10"
+                drop.CssClass = "form-control"
+                drop.EnableViewState = True
+                pnlFields.Controls.Add(drop)
+                loadLanguages(drop.ID)
+                If CType(pnlFields.FindControl("Label" & i), Label).Text.Contains("*") Then
+                    validate.ID = "RequiredFieldValidator" & i
+                    validate.ControlToValidate = drop.ID
+                    validate.ErrorMessage = "*campo obbligatorio"
+                    validate.Display = ValidatorDisplay.Dynamic
+                    validate.ForeColor = Drawing.Color.Red
+                    validate.ValidationGroup = "group1"
+                    pnlFields.Controls.Add(validate)
+                End If
+            ElseIf (i = 11 Or i = 12 Or i = 14 Or i = 19) And table = "REGISTRATIONS" Then
+                check.ID = "CheckBox" & i + 1
+                check.EnableViewState = True
+                pnlFields.Controls.Add(check)
+            ElseIf i = 14 And table = "PARTICIPANTS" Then
+                check.ID = "CheckBox" & i + 1
+                check.EnableViewState = True
+                pnlFields.Controls.Add(check)
+            Else
+                text.ID = "TextBox" & i + 1
+                text.EnableViewState = True
+                text.CssClass = "form-control"
+                pnlFields.Controls.Add(text)
+                If i = 1 And table = "REGISTRATIONS" Then
+                    pnlFields.Controls.Add(New LiteralControl("<br />"))
+                    Dim btn As New Button()
+                    btn.ID = "btnCAP"
+                    btn.Text = "Conferma CAP"
+                    btn.CssClass = "btn btn-lg btn-primary btn-block"
+                    AddHandler btn.Click, AddressOf btnConfirmCAP_Click
+                    pnlFields.Controls.Add(btn)
+                    pnlFields.Controls.Add(New LiteralControl("<br />"))
+                ElseIf i = 15 And table = "PARTICIPANTS" Then
+                    Dim btn As New Button()
+                    btn.ID = "btnLoginCode"
+                    btn.Text = "Genera Codice"
+                    btn.CssClass = "btn btn-lg btn-primary btn-block"
+                    AddHandler btn.Click, AddressOf btnGenerate_Click
+                    pnlFields.Controls.Add(btn)
+                End If
+                If CType(pnlFields.FindControl("Label" & i), Label).Text.Contains("*") Then
+                    validate.ID = "RequiredFieldValidator" & i
+                    validate.ControlToValidate = text.ID
+                    validate.ErrorMessage = "*campo obbligatorio"
+                    validate.Display = ValidatorDisplay.Dynamic
+                    validate.ForeColor = Drawing.Color.Red
+                    validate.ValidationGroup = "group1"
+                    pnlFields.Controls.Add(validate)
+                End If
+            End If
+        Next
+    End Sub
+    Protected Sub loadLanguages(ByVal field As String)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim DropDownList As DropDownList = CType(pnlFields.FindControl(field), DropDownList)
+        Try
+            cmd.CommandText = "select DESCLANGUAGE from LANGUAGES"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            DropDownList.Items.Clear()
+            While reader.Read
+                DropDownList.Items.Add(reader(0))
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            ClientScript.RegisterStartupScript(Me.GetType(), "AlertMessageBox", "alert('" & ex.Message & "');", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub loadCostItems(ByVal field As String)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim DropDownList As DropDownList = CType(pnlFields.FindControl(field), DropDownList)
+        Try
+            cmd.CommandText = "select NAME from COSTITEMS"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            DropDownList.Items.Clear()
+            While reader.Read
+                DropDownList.Items.Add(reader(0))
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            ClientScript.RegisterStartupScript(Me.GetType(), "AlertMessageBox", "alert('" & ex.Message & "');", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub loadCalendar(ByVal field As String)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim DropDownList As DropDownList = CType(pnlFields.FindControl(field), DropDownList)
+        Try
+            cmd.CommandText = "select CODE,DATE,ORIGIN,CALENDAR.COMPANY from COURSES inner join CALENDAR on COURSES.ID=CALENDAR.IDCOURSE and COURSES.COMPANY=CALENDAR.COMPANY"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            DropDownList.Items.Clear()
+            While reader.Read
+                DropDownList.Items.Add(reader(0) & "-" & reader(1) & "-" & reader(2) & "-" & reader(3))
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            ClientScript.RegisterStartupScript(Me.GetType(), "AlertMessageBox", "alert('" & ex.Message & "');", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub loadCourses(ByVal field As String)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim DropDownList As DropDownList = CType(pnlFields.FindControl(field), DropDownList)
+        Try
+            cmd.CommandText = "select CODE,COMPANY from COURSES"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            DropDownList.Items.Clear()
+            While reader.Read
+                DropDownList.Items.Add(reader(0) & "-" & reader(1))
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            ClientScript.RegisterStartupScript(Me.GetType(), "AlertMessageBox", "alert('" & ex.Message & "');", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub loadLocations(ByVal field As String)
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim DropDownList As DropDownList = CType(pnlFields.FindControl(field), DropDownList)
+        Try
+            cmd.CommandText = "select NAME,COMPANY from LOCATIONS"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            DropDownList.Items.Clear()
+            While reader.Read
+                DropDownList.Items.Add(reader(0) & "-" & reader(1))
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            ClientScript.RegisterStartupScript(Me.GetType(), "AlertMessageBox", "alert('" & ex.Message & "');", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+    End Sub
+    Protected Sub insert()
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Try
+            Select Case table
+                Case "REGISTRATIONS"
+                    cmd.CommandText = "insert into REGISTRATIONS (IDCALENDAR,CAPCODE,CAPNAME,CAPCOUNTY,CAPCOUNTRY,CAPPHONE,AGENTCODE,AGENTNAME,DATE,NPARTECIPANTS,NOVERNIGHTS,REPRESENTATIVE,DISCOUNT10,HELPER," &
+                                          "HELPERNAME,HELPERWORK,NONENIGHTS,NTWONIGHTS,NTHREENIGHTS,NNONIGHTS,PICKUP,NOTES,COMPANY) values ('" & idCalendar(CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text) & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox7"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox8"), TextBox).Text, "'", "''") & "','" & Format(Date.Now, "MM/dd/yyyy") & "','" & Replace(CType(pnlFields.FindControl("TextBox9"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox10"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox11"), TextBox).Text, "'", "''") & "','" &
+                                          CType(pnlFields.FindControl("CheckBox12"), CheckBox).Checked & "','" & CType(pnlFields.FindControl("CheckBox13"), CheckBox).Checked & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox14"), TextBox).Text, "'", "''") & "','" & CType(pnlFields.FindControl("CheckBox15"), CheckBox).Checked & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox16"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox17"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox18"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox19"), TextBox).Text, "'", "''") & "','" &
+                                          CType(pnlFields.FindControl("CheckBox20"), CheckBox).Checked & "','" & Replace(CType(pnlFields.FindControl("TextBox21"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox22"), TextBox).Text.ToUpper, "'", "''") & "')"
+                Case "PARTICIPANTS"
+                    cmd.CommandText = "insert into PARTICIPANTS (NAME,LASTNAME,BIRTHYEAR,ADDRESS,ZIPCODE,CITY,COUNTY,STATE,IDLANGUAGE,EMAIL,PHONE,FAX,MOBILEPHONE,CUSTOMERTYPE,IDREGISTRATION,PICKUP,LOGINCODE,COMPANY) " &
+                                          "values('" & Replace(CType(pnlFields.FindControl("TextBox1"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox7"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox8"), TextBox).Text, "'", "''") & "','" &
+                                          idLanguage(CType(pnlFields.FindControl("DropDownList10"), DropDownList).Text) & "','" & Replace(CType(pnlFields.FindControl("TextBox10"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox11"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox12"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox13"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox14"), TextBox).Text, "'", "''") & "','" &
+                                          idRegistration & "','" & CType(pnlFields.FindControl("CheckBox15"), CheckBox).Checked & "','" & Replace(CType(pnlFields.FindControl("TextBox16"), TextBox).Text.ToUpper, "'", "''") & "','" &
+                                          company & "')"
+                Case "CALENDAR"
+                    cmd.CommandText = "insert into CALENDAR (IDLOCATION,IDCOURSE,DATE,SEASON,PROFESSOR,ORIGIN,COMPANY) values ('" & idLocation(Replace(CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text, "'", "''")) & "','" &
+                                          idCourse(Replace(CType(pnlFields.FindControl("DropDownList9"), DropDownList).Text, "'", "''")) & "','" & Format(CDate(CType(pnlFields.FindControl("TextBox3"), TextBox).Text), "MM/dd/yyyy") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "'," &
+                                          "'" & Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox7"), TextBox).Text.ToUpper, "'", "''") & "')"
+                Case "COURSES"
+                    cmd.CommandText = "insert into COURSES (CODE,NAME,DURATION,MIN,MAX,COMPANY) values ('" & Replace(CType(pnlFields.FindControl("TextBox1"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text.ToUpper, "'", "''") & "')"
+                Case "LOCATIONS"
+                    cmd.CommandText = "insert into LOCATIONS (SITE,NAME,ADDRESS,COMPANY) values ('" & Replace(CType(pnlFields.FindControl("TextBox1"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") & "','" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text.ToUpper, "'", "''") & "')"
+                Case "COSTS"
+                    cmd.CommandText = "insert into COSTS (IDCOSTITEMS,IDCALENDAR,VALUE,COMPANY) values ('" & idCostItem(Replace(CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text, "'", "''")) & "','" &
+                                          idCalendar(Replace(CType(pnlFields.FindControl("DropDownList9"), DropDownList).Text, "'", "''")) & "','" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "','" &
+                                          Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text.ToUpper, "'", "''") & "')"
+            End Select
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            cmd.ExecuteNonQuery()
+            sqlConnection1.Close()
+            modaltitle.CssClass = "glyphicon glyphicon-ok-circle"
+            modaltext.Text = "Insert done!"
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+            loadable = False
+            btnSave.Visible = False
+            pnlFields.Controls.Clear()
+            loadItems("")
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+            action = ""
+        End Try
+    End Sub
+    Protected Sub update()
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Try
+            Select Case table
+                Case "REGISTRATIONS"
+                    cmd.CommandText = "update REGISTRATIONS set IDCALENDAR='" & idCalendar(CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text) & "',CAPCODE='" & Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") &
+                                      "',CAPNAME='" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "',CAPCOUNTY='" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") &
+                                      "',CAPCOUNTRY='" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "',CAPPHONE='" & Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text, "'", "''") &
+                                      "',AGENTCODE='" & Replace(CType(pnlFields.FindControl("TextBox7"), TextBox).Text, "'", "''") & "',AGENTNAME='" & Replace(CType(pnlFields.FindControl("TextBox8"), TextBox).Text, "'", "''") &
+                                      "',NPARTECIPANTS='" & Replace(CType(pnlFields.FindControl("TextBox9"), TextBox).Text, "'", "''") & "',NOVERNIGHTS='" & Replace(CType(pnlFields.FindControl("TextBox10"), TextBox).Text, "'", "''") &
+                                      "',REPRESENTATIVE='" & Replace(CType(pnlFields.FindControl("TextBox11"), TextBox).Text, "'", "''") & "',DISCOUNT10='" & CType(pnlFields.FindControl("CheckBox12"), CheckBox).Checked &
+                                      "',HELPER='" & CType(pnlFields.FindControl("CheckBox13"), CheckBox).Checked & "',HELPERNAME='" & Replace(CType(pnlFields.FindControl("TextBox14"), TextBox).Text, "'", "''") &
+                                      "',HELPERWORK='" & CType(pnlFields.FindControl("CheckBox15"), CheckBox).Checked & "',NONENIGHTS='" & Replace(CType(pnlFields.FindControl("TextBox16"), TextBox).Text, "'", "''") &
+                                      "',NTWONIGHTS='" & Replace(CType(pnlFields.FindControl("TextBox17"), TextBox).Text, "'", "''") & "',NTHREENIGHTS='" & Replace(CType(pnlFields.FindControl("TextBox18"), TextBox).Text, "'", "''") &
+                                      "',NNONIGHTS='" & Replace(CType(pnlFields.FindControl("TextBox19"), TextBox).Text, "'", "''") & "',PICKUP='" & CType(pnlFields.FindControl("CheckBox20"), CheckBox).Checked &
+                                      "',NOTES='" & Replace(CType(pnlFields.FindControl("TextBox21"), TextBox).Text, "'", "''") & "',COMPANY='" & Replace(CType(pnlFields.FindControl("TextBox22"), TextBox).Text.ToUpper, "'", "''") &
+                                      "' where ID='" & action.Remove(0, 6) & "'"
+                Case "PARTICIPANTS"
+                    cmd.CommandText = "update PARTICIPANTS set NAME='" & Replace(CType(pnlFields.FindControl("TextBox1"), TextBox).Text, "'", "''") & "',LASTNAME='" & Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") &
+                                      "',BIRTHYEAR='" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "',ADDRESS='" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") &
+                                      "',ZIPCODE='" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "',CITY='" & Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text, "'", "''") &
+                                      "',COUNTY='" & Replace(CType(pnlFields.FindControl("TextBox7"), TextBox).Text, "'", "''") & "',STATE='" & Replace(CType(pnlFields.FindControl("TextBox8"), TextBox).Text, "'", "''") &
+                                      "',IDLANGUAGE='" & idLanguage(CType(pnlFields.FindControl("DropDownList10"), DropDownList).Text) & "',EMAIL='" & Replace(CType(pnlFields.FindControl("TextBox10"), TextBox).Text, "'", "''") &
+                                      "',PHONE='" & Replace(CType(pnlFields.FindControl("TextBox11"), TextBox).Text, "'", "''") & "',FAX='" & Replace(CType(pnlFields.FindControl("TextBox12"), TextBox).Text, "'", "''") &
+                                      "',MOBILEPHONE='" & Replace(CType(pnlFields.FindControl("TextBox13"), TextBox).Text, "'", "''") & "',CUSTOMERTYPE='" & Replace(CType(pnlFields.FindControl("TextBox14"), TextBox).Text, "'", "''") &
+                                      "',IDREGISTRATION='" & idRegistration & "',PICKUP='" & CType(pnlFields.FindControl("CheckBox15"), CheckBox).Checked & "',LOGINCODE='" & Replace(CType(pnlFields.FindControl("TextBox16"), TextBox).Text, "'", "''") &
+                                      "',COMPANY='" & company & "' where ID='" & action.Remove(0, 6) & "'"
+                Case "CALENDAR"
+                    cmd.CommandText = "update CALENDAR set IDLOCATION='" & idLocation(Replace(CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text, "'", "''")) & "',IDCOURSE='" &
+                                      idCourse(Replace(CType(pnlFields.FindControl("DropDownList9"), DropDownList).Text, "'", "''")) & "',DATE='" & Format(CDate(CType(pnlFields.FindControl("TextBox3"), TextBox).Text), "MM/dd/yyyy") & "'," &
+                                      "SEASON='" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") & "',PROFESSOR='" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "' " &
+                                      ",ORIGIN='" & Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text, "'", "''") & "',COMPANY='" & Replace(CType(pnlFields.FindControl("TextBox7"), TextBox).Text.ToUpper, "'", "''") & "' " &
+                                      "where ID='" & action.Remove(0, 6) & "'"
+                Case "COURSES"
+                    cmd.CommandText = "update COURSES set CODE='" & Replace(CType(pnlFields.FindControl("TextBox1"), TextBox).Text, "'", "''") & "',NAME='" & Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") &
+                                      "',DURATION='" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "',MIN='" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text, "'", "''") &
+                                      "',MAX='" & Replace(CType(pnlFields.FindControl("TextBox5"), TextBox).Text, "'", "''") & "',COMPANY='" & Replace(CType(pnlFields.FindControl("TextBox6"), TextBox).Text.ToUpper, "'", "''") &
+                                      "' where ID='" & action.Remove(0, 6) & "'"
+                Case "LOCATIONS"
+                    cmd.CommandText = "update LOCATIONS set SITE='" & Replace(CType(pnlFields.FindControl("TextBox1"), TextBox).Text, "'", "''") & "',NAME='" & Replace(CType(pnlFields.FindControl("TextBox2"), TextBox).Text, "'", "''") &
+                                      "',ADDRESS='" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "',COMPANY='" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text.ToUpper, "'", "''") &
+                                      "' where ID='" & action.Remove(0, 6) & "'"
+                Case "COSTS"
+                    cmd.CommandText = "update COSTS set IDCOSTITEMS='" & idCostItem(Replace(CType(pnlFields.FindControl("DropDownList8"), DropDownList).Text, "'", "''")) & "',IDCALENDAR='" &
+                                      idCalendar(Replace(CType(pnlFields.FindControl("DropDownList9"), DropDownList).Text, "'", "''")) & "',VALUE='" & Replace(CType(pnlFields.FindControl("TextBox3"), TextBox).Text, "'", "''") & "'," &
+                                      "COMPANY='" & Replace(CType(pnlFields.FindControl("TextBox4"), TextBox).Text.ToUpper, "'", "''") & "' where ID='" & action.Remove(0, 6) & "'"
+            End Select
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            cmd.ExecuteNonQuery()
+            sqlConnection1.Close()
+            modaltitle.CssClass = "glyphicon glyphicon-ok-circle"
+            modaltext.Text = "Update done!"
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+            loadable = False
+            btnSave.Visible = False
+            pnlFields.Controls.Clear()
+            loadItems("")
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+            action = ""
+        End Try
+    End Sub
+    Protected Function idLanguage(ByVal descLanguage As String) As Integer
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        idLanguage = -1
+        Try
+            cmd.CommandText = "select ID from LANGUAGES where DESCLANGUAGE='" & descLanguage & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                idLanguage = reader(0)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return idLanguage
+    End Function
+    Protected Function descLanguage(ByVal idLanguage As Integer) As String
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        descLanguage = ""
+        Try
+            cmd.CommandText = "select DESCLANGUAGE from LANGUAGES where ID='" & idLanguage & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                descLanguage = reader(0)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return descLanguage
+    End Function
+    Protected Function idCostItem(ByVal costItem As String) As Integer
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        idCostItem = -1
+        Try
+            cmd.CommandText = "select ID from COSTITEMS where NAME='" & costItem & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                idCostItem = reader(0)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return idCostItem
+    End Function
+    Protected Function idCalendar(ByVal calendar As String) As Integer
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim calendarArray() As String = calendar.Split("-")
+        idCalendar = -1
+        Try
+            cmd.CommandText = "select ID from CALENDAR where IDCOURSE='" & idCourse(calendarArray(0) & "-" & calendarArray(3)) & "' and DATE='" & Format(CDate(calendarArray(1)), "MM/dd/yyyy") & "' and " &
+                              "ORIGIN='" & calendarArray(2) & "' and COMPANY='" & calendarArray(3) & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                idCalendar = reader(0)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return idCalendar
+    End Function
+    Protected Function idLocation(ByVal location As String) As Integer
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim locationArray() As String = location.Split("-")
+        idLocation = -1
+        Try
+            cmd.CommandText = "select ID from LOCATIONS where NAME='" & locationArray(0) & "' and COMPANY='" & locationArray(1) & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                idLocation = reader(0)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return idLocation
+    End Function
+    Protected Function idCourse(ByVal course As String) As Integer
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        Dim courseArray() As String = course.Split("-")
+        idCourse = -1
+        Try
+            cmd.CommandText = "select ID from COURSES where CODE='" & courseArray(0) & "' and COMPANY='" & courseArray(1) & "'"
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                idCourse = reader(0)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return idCourse
+    End Function
+    Protected Function infoCourse(ByVal idCourse As Integer) As String
+        Dim sqlConnection1 As New SqlConnection(cnnString)
+        Dim cmd As New SqlCommand
+        Dim reader As SqlDataReader
+        infoCourse = ""
+        Try
+            If table = "PARTICIPANTS" Then
+                cmd.CommandText = "select CODE,COURSES.COMPANY from REGISTRATIONS inner join CALENDAR on REGISTRATIONS.IDCALENDAR=CALENDAR.ID and REGISTRATIONS.COMPANY=CALENDAR.COMPANY inner join COURSES on " &
+                                  "CALENDAR.IDCOURSE=COURSES.ID and CALENDAR.COMPANY=COURSES.COMPANY where REGISTRATIONS.ID='" & idCourse & "'"
+            Else
+                cmd.CommandText = "select CODE,COMPANY from COURSES where ID='" & idCourse & "'"
+            End If
+            cmd.CommandType = CommandType.Text
+            cmd.Connection = sqlConnection1
+            sqlConnection1.Open()
+            reader = cmd.ExecuteReader()
+            While reader.Read
+                infoCourse = reader(0) & ", " & reader(1)
+            End While
+            sqlConnection1.Close()
+        Catch ex As Exception
+            modaltitle.CssClass = "glyphicon glyphicon-exclamation-sign"
+            modaltext.Text = ex.Message
+            ScriptManager.RegisterStartupScript(Page, Page.GetType(), "myModal", "$('#myModal').modal();", True)
+        Finally
+            If sqlConnection1.State = ConnectionState.Open Then
+                sqlConnection1.Close()
+            End If
+        End Try
+        Return infoCourse
+    End Function
+
+    'Protected Sub btnReset_Click(sender As Object, e As EventArgs) Handles btnReset.Click
+    '    DropDownList1.ClearSelection()
+    '    DropDownList2.ClearSelection()
+    '    DropDownList3.ClearSelection()
+    '    DropDownList4.ClearSelection()
+    '    DropDownList5.ClearSelection()
+    '    DropDownList6.ClearSelection()
+    '    DropDownList7.ClearSelection()
+    '    loadItems("")
+    'End Sub 'AZZERA I CAMPI FILTRI E CARICA LA GRIGLIA NON FILTRATA 'in caso di pulsante reset
+
+End Class
